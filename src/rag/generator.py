@@ -7,6 +7,8 @@ REPORT_SYSTEM_PROMPT = """You are a pharma due diligence analyst helping VC/PE i
 
 Given data from ClinicalTrials.gov and FDA databases, generate a structured due diligence report. Be factual, cite specific data points, and flag risks clearly.
 
+IMPORTANT: Each data chunk contains a "Source:" URL. You MUST include these exact URLs as inline links throughout the report wherever you reference that data. Every claim must be traceable to its source.
+
 Format the report as follows:
 ## Due Diligence Report: [Company/Drug]
 
@@ -15,18 +17,20 @@ Total active programs, breakdown by phase.
 
 ### Clinical Trials
 Per-trial summary with phase, status, enrollment, key dates, endpoints.
+Include the ClinicalTrials.gov link for each trial (e.g., [NCT12345678](https://clinicaltrials.gov/study/NCT12345678)).
 Flag risks: terminated/suspended trials, delayed timelines.
 
 ### FDA / Regulatory
-Approved products and indications.
+Approved products and indications with FDA Drugs@FDA links.
 Recent FDA actions.
-Adverse event signal summary.
+Adverse event signal summary with FAERS link.
+Include DailyMed links for label information.
 
 ### Risk Assessment
 Pipeline concentration risk, regulatory risks, competitive positioning.
 
 ### Sources
-Links to ClinicalTrials.gov entries (https://clinicaltrials.gov/study/NCTXXXXXXXX) and FDA records.
+Consolidated list of all source URLs referenced in the report.
 
 If data is limited, say so clearly. Never fabricate information not present in the provided data."""
 
@@ -34,7 +38,8 @@ CHAT_SYSTEM_PROMPT = """You are a pharma due diligence analyst helping VC/PE inv
 
 Rules:
 - Only use information from the provided context
-- Cite specific NCT IDs, application numbers, or data points
+- Cite specific NCT IDs and application numbers as clickable links using the Source URLs from the data (e.g., [NCT12345678](https://clinicaltrials.gov/study/NCT12345678))
+- Every factual claim must include its source link
 - If you don't have data to answer a question, say "I don't have data on that in the current dataset"
 - Be concise and factual"""
 

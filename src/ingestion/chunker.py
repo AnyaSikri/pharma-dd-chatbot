@@ -8,9 +8,12 @@ class Chunker:
         for outcome in trial.get("primary_outcomes", []):
             outcomes_text += f"  - {outcome['measure']} ({outcome.get('timeFrame', 'N/A')})\n"
         interventions_text = ", ".join(i["name"] for i in trial.get("interventions", []))
+        nct_id = trial["nct_id"]
+        source_url = f"https://clinicaltrials.gov/study/{nct_id}"
         text = (
             f"Clinical Trial: {trial['title']}\n"
-            f"NCT ID: {trial['nct_id']}\n"
+            f"NCT ID: {nct_id}\n"
+            f"Source: {source_url}\n"
             f"Phase: {trial['phase']}\n"
             f"Status: {trial['status']}\n"
             f"Sponsor: {trial['sponsor']}\n"
@@ -24,7 +27,8 @@ class Chunker:
         )
         return [{"text": text, "metadata": {
             "source": "clinicaltrials",
-            "nct_id": trial["nct_id"],
+            "source_url": source_url,
+            "nct_id": nct_id,
             "company": trial["sponsor"],
             "drug_name": interventions_text,
             "phase": trial["phase"],
@@ -58,18 +62,23 @@ class Chunker:
                 f"({s.get('submission_class_code_description', '')}): "
                 f"{s.get('submission_status', '')} on {date_fmt}\n"
             )
+        app_num = approval["application_number"]
+        app_digits = "".join(c for c in app_num if c.isdigit())
+        source_url = f"https://www.accessdata.fda.gov/scripts/cder/daf/index.cfm?event=overview.process&ApplNo={app_digits}"
         text = (
             f"FDA Drug Application: {approval['brand_name']} ({approval['generic_name']})\n"
-            f"Application Number: {approval['application_number']}\n"
+            f"Application Number: {app_num}\n"
+            f"Source: {source_url}\n"
             f"Manufacturer: {approval.get('manufacturer', '')}\n"
             f"Products:\n{products_text}"
             f"Submissions:\n{submissions_text}"
         )
         return [{"text": text, "metadata": {
             "source": "fda_approval",
+            "source_url": source_url,
             "drug_name": approval["brand_name"],
             "company": approval.get("manufacturer", ""),
-            "application_number": approval["application_number"],
+            "application_number": app_num,
         }}]
 
     @staticmethod
@@ -77,6 +86,7 @@ class Chunker:
         chunks = []
         drug_name = label.get("brand_name", "Unknown")
         company = label.get("manufacturer", "")
+        source_url = f"https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query={drug_name.replace(' ', '+')}"
         sections = {
             "indications": label.get("indications", ""),
             "boxed_warning": label.get("boxed_warning", ""),
@@ -88,10 +98,12 @@ class Chunker:
                 continue
             text = (
                 f"FDA Label - {drug_name} ({label.get('generic_name', '')}) "
-                f"- {section_name.replace('_', ' ').title()}\n\n{content}"
+                f"- {section_name.replace('_', ' ').title()}\n"
+                f"Source: {source_url}\n\n{content}"
             )
             chunks.append({"text": text, "metadata": {
                 "source": "fda_label",
+                "source_url": source_url,
                 "drug_name": drug_name,
                 "company": company,
                 "section": section_name,
@@ -102,6 +114,7 @@ class Chunker:
                 "No detailed label information available."
             ), "metadata": {
                 "source": "fda_label",
+                "source_url": source_url,
                 "drug_name": drug_name,
                 "company": company,
                 "section": "summary",
@@ -111,13 +124,16 @@ class Chunker:
     @staticmethod
     def chunk_adverse_events(drug_name: str, ae_summary: dict) -> list[dict]:
         reactions_text = ", ".join(ae_summary.get("sample_reactions", []))
+        source_url = f"https://fis.fda.gov/extensions/FPD-QDE-FAERS/FPD-QDE-FAERS.html"
         text = (
             f"Adverse Events Summary for {drug_name}\n"
+            f"Source: {source_url}\n"
             f"Total FAERS Reports: {ae_summary['total_reports']:,}\n"
             f"Serious Reports in Sample: {ae_summary.get('serious_count', 0)}\n"
             f"Common Reactions: {reactions_text}"
         )
         return [{"text": text, "metadata": {
             "source": "fda_adverse_events",
+            "source_url": source_url,
             "drug_name": drug_name,
         }}]

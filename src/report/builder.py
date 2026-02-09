@@ -44,12 +44,26 @@ class ReportBuilder:
         errors = []
 
         # 1. Fetch data from APIs (continue on partial failure)
+        # Search by both sponsor name and drug/intervention name for broader coverage
         trials = []
         try:
-            trials = await self.ct_client.search_by_sponsor(company_or_drug)
+            sponsor_trials = await self.ct_client.search_by_sponsor(company_or_drug)
+            trials.extend(sponsor_trials)
         except Exception as e:
-            logger.error("ClinicalTrials.gov API error: %s", e)
-            errors.append(f"ClinicalTrials.gov lookup failed: {e}")
+            logger.error("ClinicalTrials.gov sponsor search error: %s", e)
+            errors.append(f"ClinicalTrials.gov sponsor lookup failed: {e}")
+
+        try:
+            drug_trials = await self.ct_client.search_by_drug(company_or_drug)
+            # Deduplicate by NCT ID
+            existing_ids = {t["nct_id"] for t in trials}
+            for t in drug_trials:
+                if t["nct_id"] not in existing_ids:
+                    trials.append(t)
+                    existing_ids.add(t["nct_id"])
+        except Exception as e:
+            logger.error("ClinicalTrials.gov drug search error: %s", e)
+            errors.append(f"ClinicalTrials.gov drug lookup failed: {e}")
 
         approvals = []
         try:
