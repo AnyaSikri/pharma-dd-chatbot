@@ -1,6 +1,7 @@
 # app.py
 import streamlit as st
 import asyncio
+import threading
 import os
 from dotenv import load_dotenv
 from src.api.clinical_trials import ClinicalTrialsClient
@@ -15,12 +16,34 @@ load_dotenv()
 
 st.set_page_config(
     page_title="Pharma Due Diligence",
-    page_icon="💊",
+    page_icon="\U0001f48a",
     layout="wide",
 )
 
 st.title("Pharma Due Diligence Chatbot")
 st.caption("RAG-powered analysis using ClinicalTrials.gov and FDA data")
+
+
+def _run_async(coro):
+    """Run an async coroutine from synchronous Streamlit context."""
+    result = [None]
+    exception = [None]
+
+    def target():
+        loop = asyncio.new_event_loop()
+        try:
+            result[0] = loop.run_until_complete(coro)
+        except Exception as e:
+            exception[0] = e
+        finally:
+            loop.close()
+
+    thread = threading.Thread(target=target)
+    thread.start()
+    thread.join()
+    if exception[0]:
+        raise exception[0]
+    return result[0]
 
 
 @st.cache_resource
@@ -86,12 +109,12 @@ if generate_btn and company_input:
     st.session_state.current_company = company_input
 
     with st.spinner(f"Fetching data and generating report for {company_input}..."):
-        report = asyncio.run(builder.build_report(company_input))
+        try:
+            report = _run_async(builder.build_report(company_input))
+        except Exception as e:
+            report = f"Error generating report: {e}"
 
-    sanitized = "".join(c if c.isalnum() else "_" for c in company_input.lower()).strip("_")[:50]
-    if len(sanitized) < 3:
-        sanitized = sanitized + "_co"
-    st.session_state.collection_name = sanitized
+    st.session_state.collection_name = ReportBuilder.sanitize_collection_name(company_input)
 
     st.session_state.messages.append({"role": "assistant", "content": report})
     st.rerun()

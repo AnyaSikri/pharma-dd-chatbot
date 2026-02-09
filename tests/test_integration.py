@@ -69,10 +69,11 @@ async def test_full_pipeline_with_mocked_apis():
     # Mock embedder (don't actually call OpenAI)
     embedder = MagicMock(spec=Embedder)
     embedder.embed_and_store = MagicMock()
+    embedder.embed_query = MagicMock(return_value=[0.1] * 1536)
     mock_collection = MagicMock()
     embedder.get_collection.return_value = mock_collection
 
-    # Retriever will use all_chunks fallback since mock metadata filter returns empty
+    # Retriever gets all docs from collection (no company filter)
     mock_collection.get.return_value = {"documents": [], "metadatas": [], "ids": []}
     retriever = Retriever(embedder=embedder)
 

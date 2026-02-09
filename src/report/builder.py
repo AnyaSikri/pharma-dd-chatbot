@@ -1,10 +1,13 @@
 # src/report/builder.py
+import logging
 from src.api.clinical_trials import ClinicalTrialsClient
 from src.api.fda import FDAClient
 from src.ingestion.chunker import Chunker
 from src.ingestion.embedder import Embedder
 from src.rag.retriever import Retriever
 from src.rag.generator import Generator
+
+logger = logging.getLogger(__name__)
 
 
 def _sanitize_collection_name(name: str) -> str:
@@ -32,22 +35,46 @@ class ReportBuilder:
         self.retriever = retriever
         self.generator = generator
 
+    @staticmethod
+    def sanitize_collection_name(name: str) -> str:
+        return _sanitize_collection_name(name)
+
     async def build_report(self, company_or_drug: str) -> str:
         collection_name = _sanitize_collection_name(company_or_drug)
+        errors = []
 
-        # 1. Fetch data from APIs
-        trials = await self.ct_client.search_by_sponsor(company_or_drug)
-        approvals = await self.fda_client.search_approvals(company_or_drug)
+        # 1. Fetch data from APIs (continue on partial failure)
+        trials = []
+        try:
+            trials = await self.ct_client.search_by_sponsor(company_or_drug)
+        except Exception as e:
+            logger.error("ClinicalTrials.gov API error: %s", e)
+            errors.append(f"ClinicalTrials.gov lookup failed: {e}")
+
+        approvals = []
+        try:
+            approvals = await self.fda_client.search_approvals(company_or_drug)
+        except Exception as e:
+            logger.error("openFDA approvals API error: %s", e)
+            errors.append(f"FDA approvals lookup failed: {e}")
 
         # Get labels and adverse events for each approved drug
         drug_names = list({a["brand_name"] for a in approvals if a["brand_name"]})
         labels = []
         ae_summaries = []
         for drug_name in drug_names:
-            drug_labels = await self.fda_client.search_labels(drug_name)
-            labels.extend(drug_labels)
-            ae_summary = await self.fda_client.get_adverse_events_summary(drug_name)
-            ae_summaries.append((drug_name, ae_summary))
+            try:
+                drug_labels = await self.fda_client.search_labels(drug_name)
+                labels.extend(drug_labels)
+            except Exception as e:
+                logger.error("openFDA labels API error for %s: %s", drug_name, e)
+                errors.append(f"FDA labels lookup failed for {drug_name}: {e}")
+            try:
+                ae_summary = await self.fda_client.get_adverse_events_summary(drug_name)
+                ae_summaries.append((drug_name, ae_summary))
+            except Exception as e:
+                logger.error("openFDA adverse events API error for %s: %s", drug_name, e)
+                errors.append(f"FDA adverse events lookup failed for {drug_name}: {e}")
 
         # 2. Chunk all data
         all_chunks = []
@@ -61,7 +88,11 @@ class ReportBuilder:
             all_chunks.extend(self.chunker_cls.chunk_adverse_events(drug_name, ae_summary))
 
         if not all_chunks:
-            return f"No data found for '{company_or_drug}' in ClinicalTrials.gov or FDA databases."
+            error_detail = "\n".join(errors) if errors else ""
+            msg = f"No data found for '{company_or_drug}' in ClinicalTrials.gov or FDA databases."
+            if error_detail:
+                msg += f"\n\nErrors encountered:\n{error_detail}"
+            return msg
 
         # 3. Embed and store
         self.embedder.embed_and_store(all_chunks, collection_name=collection_name)
@@ -69,13 +100,18 @@ class ReportBuilder:
         # 4. Retrieve all chunks for report
         report_chunks = self.retriever.retrieve_for_report(collection_name, company_or_drug)
 
-        # If metadata filter returns nothing, fall back to all chunks
+        # If retrieval returns nothing, fall back to all chunks
         if not report_chunks:
             report_chunks = all_chunks
 
         # 5. Generate report
-        return self.generator.generate_report(company_or_drug, report_chunks)
+        report = self.generator.generate_report(company_or_drug, report_chunks)
 
-    @property
-    def collection_name_for(self):
-        return _sanitize_collection_name
+        if errors:
+            report += "\n\n---\n*Note: Some data sources were unavailable: " + "; ".join(errors) + "*"
+
+        return report
+
+    async def close(self):
+        await self.ct_client.close()
+        await self.fda_client.close()

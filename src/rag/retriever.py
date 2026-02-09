@@ -8,7 +8,6 @@ class Retriever:
     def retrieve_for_report(self, collection_name: str, company: str) -> list:
         collection = self._embedder.get_collection(collection_name)
         results = collection.get(
-            where={"company": company},
             include=["documents", "metadatas"],
         )
         chunks = []
@@ -18,10 +17,7 @@ class Retriever:
 
     def retrieve_for_chat(self, collection_name: str, query: str, n_results: int = 10) -> list:
         collection = self._embedder.get_collection(collection_name)
-        response = self._embedder._openai.embeddings.create(
-            model=EMBEDDING_MODEL, input=[query],
-        )
-        query_embedding = response.data[0].embedding
+        query_embedding = self._embedder.embed_query(query)
         results = collection.query(
             query_embeddings=[query_embedding],
             n_results=n_results,

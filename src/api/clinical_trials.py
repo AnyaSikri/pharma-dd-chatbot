@@ -102,3 +102,9 @@ class ClinicalTrialsClient:
     async def close(self):
         """Close the underlying HTTP client."""
         await self._client.aclose()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        await self.close()

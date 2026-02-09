@@ -1,6 +1,7 @@
 from anthropic import Anthropic
 
 MODEL = "claude-sonnet-4-5-20250929"
+MAX_HISTORY_MESSAGES = 20
 
 REPORT_SYSTEM_PROMPT = """You are a pharma due diligence analyst helping VC/PE investors evaluate pharmaceutical and biotech companies.
 
@@ -60,7 +61,8 @@ class Generator:
 
     def generate_chat_response(self, question: str, chunks: list[dict], history: list[dict]) -> str:
         context = "\n\n---\n\n".join(chunk["text"] for chunk in chunks) if chunks else "No relevant data found."
-        messages = list(history) + [{
+        recent_history = history[-MAX_HISTORY_MESSAGES:] if len(history) > MAX_HISTORY_MESSAGES else history
+        messages = list(recent_history) + [{
             "role": "user",
             "content": f"Context from database:\n{context}\n\nQuestion: {question}"
         }]

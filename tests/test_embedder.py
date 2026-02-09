@@ -32,8 +32,8 @@ def test_embed_and_store(mock_openai, mock_chroma):
     ]
     embedder.embed_and_store(chunks, collection_name="test_company")
     mock_openai.embeddings.create.assert_called()
-    mock_chroma.add.assert_called_once()
-    call_args = mock_chroma.add.call_args
+    mock_chroma.upsert.assert_called_once()
+    call_args = mock_chroma.upsert.call_args
     assert len(call_args.kwargs["documents"]) == 2
     assert len(call_args.kwargs["ids"]) == 2
 

@@ -1,8 +1,15 @@
 # src/api/fda.py
 from __future__ import annotations
 
+import re
 import httpx
 from typing import Optional
+
+_LUCENE_SPECIAL = re.compile(r'([+\-&|!(){}\[\]^"~*?:\\/])')
+
+
+def _escape_lucene(value: str) -> str:
+    return _LUCENE_SPECIAL.sub(r'\\\1', value)
 
 
 class FDAClient:
@@ -25,7 +32,7 @@ class FDAClient:
         """Search drug approval records by company or drug name."""
         params = {
             **self._base_params(),
-            "search": f'openfda.manufacturer_name:"{company_or_drug}"+openfda.brand_name:"{company_or_drug}"',
+            "search": f'openfda.manufacturer_name:"{_escape_lucene(company_or_drug)}"+openfda.brand_name:"{_escape_lucene(company_or_drug)}"',
             "limit": min(limit, 99),
         }
         response = await self._client.get(self.DRUGSFDA_URL, params=params)
@@ -55,7 +62,7 @@ class FDAClient:
         """Search drug labeling information by drug name."""
         params = {
             **self._base_params(),
-            "search": f'openfda.brand_name:"{drug_name}"+openfda.generic_name:"{drug_name}"',
+            "search": f'openfda.brand_name:"{_escape_lucene(drug_name)}"+openfda.generic_name:"{_escape_lucene(drug_name)}"',
             "limit": min(limit, 99),
         }
         response = await self._client.get(self.LABEL_URL, params=params)
@@ -83,7 +90,7 @@ class FDAClient:
         """Get a summary of adverse event reports for a given drug."""
         params = {
             **self._base_params(),
-            "search": f'patient.drug.openfda.brand_name:"{drug_name}"',
+            "search": f'patient.drug.openfda.brand_name:"{_escape_lucene(drug_name)}"',
             "limit": min(limit, 99),
         }
         response = await self._client.get(self.EVENTS_URL, params=params)
@@ -114,3 +121,9 @@ class FDAClient:
     async def close(self):
         """Close the underlying HTTP client."""
         await self._client.aclose()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        await self.close()
