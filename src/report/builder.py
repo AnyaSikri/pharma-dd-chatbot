@@ -94,6 +94,31 @@ class ReportBuilder:
                 logger.error("openFDA adverse events API error for %s: %s", drug_name, e)
                 errors.append(f"FDA adverse events lookup failed for {drug_name}: {e}")
 
+        # Device data (510(k) clearances, MAUDE adverse events, recalls)
+        device_clearances = []
+        try:
+            device_clearances = await self.fda_client.search_device_clearances(company_or_drug)
+        except Exception as e:
+            logger.error("openFDA device clearances API error: %s", e)
+            errors.append(f"FDA device clearances lookup failed: {e}")
+
+        device_names = list({d["device_name"] for d in device_clearances if d.get("device_name")})
+        device_ae_summaries = []
+        for device_name in device_names:
+            try:
+                ae = await self.fda_client.get_device_adverse_events_summary(device_name)
+                device_ae_summaries.append((device_name, ae))
+            except Exception as e:
+                logger.error("MAUDE adverse events API error for %s: %s", device_name, e)
+                errors.append(f"MAUDE adverse events lookup failed for {device_name}: {e}")
+
+        device_recalls = []
+        try:
+            device_recalls = await self.fda_client.search_device_recalls(company_or_drug)
+        except Exception as e:
+            logger.error("openFDA device recalls API error: %s", e)
+            errors.append(f"FDA device recalls lookup failed: {e}")
+
         # 2. Chunk all data
         all_chunks = []
         for trial in trials:
@@ -104,6 +129,12 @@ class ReportBuilder:
             all_chunks.extend(self.chunker_cls.chunk_fda_label(label))
         for drug_name, ae_summary in ae_summaries:
             all_chunks.extend(self.chunker_cls.chunk_adverse_events(drug_name, ae_summary))
+        for clearance in device_clearances:
+            all_chunks.extend(self.chunker_cls.chunk_device_clearance(clearance))
+        if device_recalls:
+            all_chunks.extend(self.chunker_cls.chunk_device_recalls(company_or_drug, device_recalls))
+        for device_name, ae in device_ae_summaries:
+            all_chunks.extend(self.chunker_cls.chunk_device_adverse_events(device_name, ae))
 
         if not all_chunks:
             error_detail = "\n".join(errors) if errors else ""

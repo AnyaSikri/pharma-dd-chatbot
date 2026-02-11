@@ -13,11 +13,14 @@ def _escape_lucene(value: str) -> str:
 
 
 class FDAClient:
-    """Async client for the openFDA API (drug approvals, labels, adverse events)."""
+    """Async client for the openFDA API (drugs, devices, labels, adverse events)."""
 
     DRUGSFDA_URL = "https://api.fda.gov/drug/drugsfda.json"
     LABEL_URL = "https://api.fda.gov/drug/label.json"
     EVENTS_URL = "https://api.fda.gov/drug/event.json"
+    DEVICE_510K_URL = "https://api.fda.gov/device/510k.json"
+    DEVICE_EVENT_URL = "https://api.fda.gov/device/event.json"
+    DEVICE_RECALL_URL = "https://api.fda.gov/device/recall.json"
 
     def __init__(self, api_key: Optional[str] = None):
         self._client = httpx.AsyncClient(timeout=30.0)
@@ -117,6 +120,96 @@ class FDAClient:
             "sample_reactions": reactions[:20],
             "serious_count": serious_count,
         }
+
+    async def search_device_clearances(self, company_or_device: str, limit: int = 50) -> list[dict]:
+        """Search 510(k) device clearances by company or device name."""
+        escaped = _escape_lucene(company_or_device)
+        params = {
+            **self._base_params(),
+            "search": f'applicant:"{escaped}"+device_name:"{escaped}"',
+            "limit": min(limit, 99),
+        }
+        response = await self._client.get(self.DEVICE_510K_URL, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        if "error" in data:
+            return []
+
+        results = []
+        for record in data.get("results", []):
+            results.append({
+                "k_number": record.get("k_number", ""),
+                "applicant": record.get("applicant", ""),
+                "device_name": record.get("device_name", ""),
+                "product_code": record.get("product_code", ""),
+                "clearance_type": record.get("clearance_type", ""),
+                "decision_date": record.get("decision_date", ""),
+                "decision_description": record.get("decision_description", ""),
+                "advisory_committee_description": record.get("advisory_committee_description", ""),
+            })
+        return results
+
+    async def get_device_adverse_events_summary(self, device_name: str, limit: int = 10) -> dict:
+        """Get a summary of MAUDE adverse event reports for a device."""
+        escaped = _escape_lucene(device_name)
+        params = {
+            **self._base_params(),
+            "search": f'device.generic_name:"{escaped}"+device.brand_name:"{escaped}"',
+            "limit": min(limit, 99),
+        }
+        response = await self._client.get(self.DEVICE_EVENT_URL, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        if "error" in data:
+            return {"total_reports": 0, "serious_count": 0, "sample_events": []}
+
+        total = data.get("meta", {}).get("results", {}).get("total", 0)
+        serious_count = 0
+        sample_events = []
+
+        for report in data.get("results", []):
+            if report.get("event_type", "").upper() in ("DEATH", "INJURY"):
+                serious_count += 1
+            for text_entry in report.get("mdr_text", []):
+                narrative = text_entry.get("text", "")
+                if narrative and len(sample_events) < 5:
+                    sample_events.append(narrative[:300])
+
+        return {
+            "total_reports": total,
+            "serious_count": serious_count,
+            "sample_events": sample_events,
+        }
+
+    async def search_device_recalls(self, company_or_device: str, limit: int = 20) -> list[dict]:
+        """Search device recall records by company or product description."""
+        escaped = _escape_lucene(company_or_device)
+        params = {
+            **self._base_params(),
+            "search": f'recalling_firm:"{escaped}"+product_description:"{escaped}"',
+            "limit": min(limit, 99),
+        }
+        response = await self._client.get(self.DEVICE_RECALL_URL, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        if "error" in data:
+            return []
+
+        results = []
+        for record in data.get("results", []):
+            results.append({
+                "res_event_number": record.get("res_event_number", ""),
+                "recalling_firm": record.get("recalling_firm", ""),
+                "product_description": record.get("product_description", ""),
+                "reason_for_recall": record.get("reason_for_recall", ""),
+                "classification": record.get("event_date_terminated", "") and "Class " + str(record.get("product_res_number", "")),
+                "event_date_terminated": record.get("event_date_terminated", ""),
+                "status": record.get("status", ""),
+            })
+        return results
 
     async def close(self):
         """Close the underlying HTTP client."""

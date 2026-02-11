@@ -70,6 +70,58 @@ def test_chunk_fda_label():
     assert any(c["metadata"]["source"] == "fda_label" for c in chunks)
 
 
+def test_chunk_device_clearance():
+    clearance = {
+        "k_number": "K223456",
+        "applicant": "DeepSight Medical Inc.",
+        "device_name": "DeepSight AI Imaging System",
+        "product_code": "QBS",
+        "clearance_type": "Traditional",
+        "decision_date": "20230615",
+        "decision_description": "Substantially Equivalent",
+        "advisory_committee_description": "Radiology",
+    }
+    chunks = Chunker.chunk_device_clearance(clearance)
+    assert len(chunks) == 1
+    chunk = chunks[0]
+    assert "K223456" in chunk["text"]
+    assert "DeepSight AI Imaging System" in chunk["text"]
+    assert chunk["metadata"]["source"] == "fda_device_clearance"
+    assert chunk["metadata"]["device_name"] == "DeepSight AI Imaging System"
+    assert "cfpmn" in chunk["metadata"]["source_url"]
+
+
+def test_chunk_device_recalls():
+    recalls = [
+        {
+            "res_event_number": "Z-1234-2024",
+            "recalling_firm": "DeepSight Medical Inc.",
+            "product_description": "DeepSight AI Imaging System",
+            "reason_for_recall": "Software error",
+            "status": "Terminated",
+        }
+    ]
+    chunks = Chunker.chunk_device_recalls("DeepSight", recalls)
+    assert len(chunks) == 1
+    chunk = chunks[0]
+    assert "Software error" in chunk["text"]
+    assert chunk["metadata"]["source"] == "fda_device_recall"
+
+
+def test_chunk_device_adverse_events():
+    ae_summary = {
+        "total_reports": 120,
+        "serious_count": 5,
+        "sample_events": ["Patient experienced irritation"],
+    }
+    chunks = Chunker.chunk_device_adverse_events("DeepSight AI", ae_summary)
+    assert len(chunks) == 1
+    chunk = chunks[0]
+    assert "120" in chunk["text"]
+    assert chunk["metadata"]["source"] == "fda_device_events"
+    assert chunk["metadata"]["device_name"] == "DeepSight AI"
+
+
 def test_chunk_adverse_events():
     ae_summary = {
         "total_reports": 5000,

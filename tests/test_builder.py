@@ -33,6 +33,10 @@ def mock_deps():
         "total_reports": 100, "sample_reactions": ["Nausea"], "serious_count": 5
     }
 
+    fda_client.search_device_clearances.return_value = []
+    fda_client.get_device_adverse_events_summary.return_value = {"total_reports": 0, "serious_count": 0, "sample_events": []}
+    fda_client.search_device_recalls.return_value = []
+
     chunker_cls.chunk_clinical_trial.return_value = [{"text": "trial chunk", "metadata": {"source": "clinicaltrials", "company": "TestPharma"}}]
     chunker_cls.chunk_fda_approval.return_value = [{"text": "approval chunk", "metadata": {"source": "fda_approval"}}]
     chunker_cls.chunk_fda_label.return_value = [{"text": "label chunk", "metadata": {"source": "fda_label"}}]

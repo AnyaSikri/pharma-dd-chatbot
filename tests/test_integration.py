@@ -66,6 +66,9 @@ async def test_full_pipeline_with_mocked_apis():
         "sample_reactions": ["Fatigue", "Nausea", "Headache"],
         "serious_count": 12,
     }
+    fda_client.search_device_clearances.return_value = []
+    fda_client.get_device_adverse_events_summary.return_value = {"total_reports": 0, "serious_count": 0, "sample_events": []}
+    fda_client.search_device_recalls.return_value = []
 
     # Mock embedder (don't actually call OpenAI)
     embedder = MagicMock(spec=Embedder)
