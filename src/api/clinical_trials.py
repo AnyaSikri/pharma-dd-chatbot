@@ -23,13 +23,19 @@ class ClinicalTrialsClient:
     def __init__(self):
         self._client = httpx.AsyncClient(timeout=30.0)
 
-    async def search_by_sponsor(self, sponsor: str, max_results: int = 100) -> list[dict]:
+    async def search_by_sponsor(self, sponsor: str, max_results: int = 100, condition: str = None) -> list[dict]:
         """Search clinical trials by sponsor name."""
-        return await self._search(params={"query.spons": sponsor}, max_results=max_results)
+        params = {"query.spons": sponsor}
+        if condition:
+            params["query.cond"] = condition
+        return await self._search(params=params, max_results=max_results)
 
-    async def search_by_drug(self, drug_name: str, max_results: int = 100) -> list[dict]:
+    async def search_by_drug(self, drug_name: str, max_results: int = 100, condition: str = None) -> list[dict]:
         """Search clinical trials by drug / intervention name."""
-        return await self._search(params={"query.intr": drug_name}, max_results=max_results)
+        params = {"query.intr": drug_name}
+        if condition:
+            params["query.cond"] = condition
+        return await self._search(params=params, max_results=max_results)
 
     async def _search(self, params: dict, max_results: int) -> list[dict]:
         """Internal paginated search against the ClinicalTrials.gov v2 API."""

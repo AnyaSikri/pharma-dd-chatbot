@@ -39,7 +39,7 @@ class ReportBuilder:
     def sanitize_collection_name(name: str) -> str:
         return _sanitize_collection_name(name)
 
-    async def build_report(self, company_or_drug: str) -> str:
+    async def build_report(self, company_or_drug: str, condition: str = None, phases: list = None) -> str:
         collection_name = _sanitize_collection_name(company_or_drug)
         errors = []
 
@@ -47,14 +47,14 @@ class ReportBuilder:
         # Search by both sponsor name and drug/intervention name for broader coverage
         trials = []
         try:
-            sponsor_trials = await self.ct_client.search_by_sponsor(company_or_drug)
+            sponsor_trials = await self.ct_client.search_by_sponsor(company_or_drug, condition=condition)
             trials.extend(sponsor_trials)
         except Exception as e:
             logger.error("ClinicalTrials.gov sponsor search error: %s", e)
             errors.append(f"ClinicalTrials.gov sponsor lookup failed: {e}")
 
         try:
-            drug_trials = await self.ct_client.search_by_drug(company_or_drug)
+            drug_trials = await self.ct_client.search_by_drug(company_or_drug, condition=condition)
             # Deduplicate by NCT ID
             existing_ids = {t["nct_id"] for t in trials}
             for t in drug_trials:
@@ -64,6 +64,10 @@ class ReportBuilder:
         except Exception as e:
             logger.error("ClinicalTrials.gov drug search error: %s", e)
             errors.append(f"ClinicalTrials.gov drug lookup failed: {e}")
+
+        # Filter by phase if specified
+        if phases and trials:
+            trials = [t for t in trials if any(p in t.get("phase", "") for p in phases)]
 
         approvals = []
         try:

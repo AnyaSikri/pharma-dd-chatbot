@@ -20,6 +20,7 @@ def mock_deps():
          "brief_summary": "A test trial", "start_date": "2024-01-01",
          "primary_completion_date": "2026-01-01", "has_results": False}
     ]
+    ct_client.search_by_drug.return_value = []
     fda_client.search_approvals.return_value = [
         {"application_number": "NDA123", "brand_name": "DrugX", "generic_name": "drugx",
          "manufacturer": "TestPharma", "products": [], "submissions": []}
@@ -57,7 +58,8 @@ async def test_build_report(mock_deps):
     report = await builder.build_report("TestPharma")
 
     assert "Due Diligence Report" in report
-    mock_deps["ct_client"].search_by_sponsor.assert_called_once_with("TestPharma")
+    mock_deps["ct_client"].search_by_sponsor.assert_called_once_with("TestPharma", condition=None)
+    mock_deps["ct_client"].search_by_drug.assert_called_once_with("TestPharma", condition=None)
     mock_deps["fda_client"].search_approvals.assert_called_once()
     mock_deps["embedder"].embed_and_store.assert_called_once()
     mock_deps["generator"].generate_report.assert_called_once()

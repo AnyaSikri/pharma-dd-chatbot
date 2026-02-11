@@ -16,6 +16,7 @@ async def test_full_pipeline_with_mocked_apis():
     """Test the complete flow: fetch -> chunk -> embed -> retrieve -> generate."""
     # Mock ClinicalTrials API
     ct_client = AsyncMock(spec=ClinicalTrialsClient)
+    ct_client.search_by_drug.return_value = []
     ct_client.search_by_sponsor.return_value = [
         {
             "nct_id": "NCT99999999",
@@ -100,7 +101,8 @@ async def test_full_pipeline_with_mocked_apis():
     report = await builder.build_report("IntegrationPharma")
 
     # Verify the pipeline executed correctly
-    ct_client.search_by_sponsor.assert_called_once_with("IntegrationPharma")
+    ct_client.search_by_sponsor.assert_called_once_with("IntegrationPharma", condition=None)
+    ct_client.search_by_drug.assert_called_once_with("IntegrationPharma", condition=None)
     fda_client.search_approvals.assert_called_once_with("IntegrationPharma")
     fda_client.search_labels.assert_called_once_with("MagicDrug")
     fda_client.get_adverse_events_summary.assert_called_once_with("MagicDrug")
