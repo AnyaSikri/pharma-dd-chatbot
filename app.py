@@ -323,6 +323,14 @@ QUICK_PICKS = {
         ("Day One Bio", "DAWN"),
         ("Krystal Biotech", "KRYS"),
     ],
+    "Medtech": [
+        ("Deepsight", "DSGT"),
+        ("Intuitive Surgical", "ISRG"),
+        ("Medtronic", "MDT"),
+        ("Abbott Labs", "ABT"),
+        ("Stryker", "SYK"),
+        ("Edwards Lifesciences", "EW"),
+    ],
 }
 
 with st.sidebar:
