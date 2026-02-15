@@ -1,7 +1,9 @@
 # src/report/builder.py
 import logging
+from typing import Optional
 from src.api.clinical_trials import ClinicalTrialsClient
 from src.api.fda import FDAClient
+from src.api.sec_edgar import SECEdgarClient
 from src.ingestion.chunker import Chunker
 from src.ingestion.embedder import Embedder
 from src.rag.retriever import Retriever
@@ -23,6 +25,7 @@ class ReportBuilder:
         self,
         ct_client: ClinicalTrialsClient,
         fda_client: FDAClient,
+        sec_client: Optional[SECEdgarClient] = None,
         chunker_cls: type = Chunker,
         embedder: Embedder = None,
         retriever: Retriever = None,
@@ -30,6 +33,7 @@ class ReportBuilder:
     ):
         self.ct_client = ct_client
         self.fda_client = fda_client
+        self.sec_client = sec_client
         self.chunker_cls = chunker_cls
         self.embedder = embedder
         self.retriever = retriever
@@ -119,6 +123,42 @@ class ReportBuilder:
             logger.error("openFDA device recalls API error: %s", e)
             errors.append(f"FDA device recalls lookup failed: {e}")
 
+        # SEC EDGAR + Market Data
+        sec_company = None
+        sec_filings = []
+        company_facts = {}
+        market_data = None
+
+        if self.sec_client:
+            try:
+                sec_company = await self.sec_client.lookup_company(company_or_drug)
+            except Exception as e:
+                logger.error("SEC EDGAR company lookup error: %s", e)
+                errors.append(f"SEC company lookup failed: {e}")
+
+            if sec_company:
+                cik = sec_company["cik"]
+                ticker = sec_company.get("ticker", "")
+
+                try:
+                    sec_filings = await self.sec_client.get_filings(cik)
+                except Exception as e:
+                    logger.error("SEC EDGAR filings error: %s", e)
+                    errors.append(f"SEC filings lookup failed: {e}")
+
+                try:
+                    company_facts = await self.sec_client.get_company_facts(cik)
+                except Exception as e:
+                    logger.error("SEC XBRL company facts error: %s", e)
+                    errors.append(f"SEC financial data lookup failed: {e}")
+
+                if ticker:
+                    try:
+                        market_data = await self.sec_client.get_market_data(ticker)
+                    except Exception as e:
+                        logger.error("yfinance market data error: %s", e)
+                        errors.append(f"Market data lookup failed: {e}")
+
         # 2. Chunk all data
         all_chunks = []
         for trial in trials:
@@ -135,6 +175,12 @@ class ReportBuilder:
             all_chunks.extend(self.chunker_cls.chunk_device_recalls(company_or_drug, device_recalls))
         for device_name, ae in device_ae_summaries:
             all_chunks.extend(self.chunker_cls.chunk_device_adverse_events(device_name, ae))
+        if sec_filings:
+            company_display = sec_company.get("name", company_or_drug) if sec_company else company_or_drug
+            all_chunks.extend(self.chunker_cls.chunk_sec_filings(company_display, sec_filings))
+        if company_facts or market_data:
+            company_display = company_facts.get("company_name") or (sec_company or {}).get("name", company_or_drug)
+            all_chunks.extend(self.chunker_cls.chunk_company_financials(company_display, company_facts, market_data))
 
         if not all_chunks:
             error_detail = "\n".join(errors) if errors else ""
@@ -156,11 +202,12 @@ class ReportBuilder:
         # 5. Generate report
         report = self.generator.generate_report(company_or_drug, report_chunks)
 
-        if errors:
-            report += "\n\n---\n*Note: Some data sources were unavailable: " + "; ".join(errors) + "*"
+        # Errors logged but not shown to user
 
         return report
 
     async def close(self):
         await self.ct_client.close()
         await self.fda_client.close()
+        if self.sec_client:
+            await self.sec_client.close()

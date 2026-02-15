@@ -122,6 +122,52 @@ def test_chunk_device_adverse_events():
     assert chunk["metadata"]["device_name"] == "DeepSight AI"
 
 
+def test_chunk_sec_filings():
+    filings = [
+        {
+            "form_type": "10-K",
+            "filing_date": "2024-02-22",
+            "accession_number": "0001682852-24-000010",
+            "primary_document": "mrna-20231231.htm",
+            "description": "10-K Annual Report",
+            "filing_url": "https://www.sec.gov/Archives/edgar/data/1682852/mrna-20231231.htm",
+            "company_name": "Moderna, Inc.",
+        }
+    ]
+    chunks = Chunker.chunk_sec_filings("Moderna, Inc.", filings)
+    assert len(chunks) == 1
+    assert "10-K" in chunks[0]["text"]
+    assert "2024-02-22" in chunks[0]["text"]
+    assert chunks[0]["metadata"]["source"] == "sec_filings"
+    assert chunks[0]["metadata"]["company"] == "Moderna, Inc."
+
+
+def test_chunk_sec_filings_empty():
+    chunks = Chunker.chunk_sec_filings("Test Corp", [])
+    assert chunks == []
+
+
+def test_chunk_company_financials_with_market_data():
+    facts = {
+        "company_name": "Moderna, Inc.",
+        "revenue": {"value": 6671000000, "period_end": "2023-12-31", "form": "10-K"},
+    }
+    market = {
+        "ticker": "MRNA",
+        "current_price": 95.50,
+        "market_cap": 36500000000,
+        "trailing_pe": None,
+        "sector": "Healthcare",
+        "industry": "Biotechnology",
+    }
+    chunks = Chunker.chunk_company_financials("Moderna, Inc.", facts, market)
+    assert len(chunks) == 2
+    sources = [c["metadata"]["source"] for c in chunks]
+    assert "sec_financials" in sources
+    assert "market_data" in sources
+    assert any("MRNA" in c["text"] for c in chunks)
+
+
 def test_chunk_adverse_events():
     ae_summary = {
         "total_reports": 5000,

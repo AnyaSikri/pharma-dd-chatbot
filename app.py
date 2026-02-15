@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 from src.api.clinical_trials import ClinicalTrialsClient
 from src.api.fda import FDAClient
+from src.api.sec_edgar import SECEdgarClient
 from src.ingestion.chunker import Chunker
 from src.ingestion.embedder import Embedder
 from src.rag.retriever import Retriever
@@ -25,143 +26,196 @@ st.set_page_config(
 st.markdown("""
 <style>
     /* ── Global ── */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
     html, body, [class*="st-"] {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    /* Hide default Streamlit branding */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
+    /* Hide ALL Streamlit chrome */
+    #MainMenu, footer, header,
+    [data-testid="stDecoration"],
+    [data-testid="stToolbar"],
+    [data-testid="stStatusWidget"],
+    .viewerBadge_container__r5tak,
+    ._profileContainer_gzau3_53 {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+    }
 
     /* ── Main content area ── */
-    .block-container {
-        padding-top: 2rem !important;
-        padding-bottom: 0 !important;
-        max-width: 900px;
+    .main .block-container {
+        padding: 1.5rem 2rem 0 2rem !important;
+        max-width: 960px;
+    }
+    .main {
+        background: #f8f9fb;
     }
 
     /* ── Sidebar ── */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
-        border-right: 1px solid rgba(255,255,255,0.06);
+        background: linear-gradient(180deg, #0a0f1e 0%, #131c33 50%, #1a2540 100%);
+        border-right: none;
+        box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+    }
+    [data-testid="stSidebar"] > div:first-child {
+        padding-top: 1.5rem;
     }
     [data-testid="stSidebar"] * {
-        color: #e2e8f0 !important;
+        color: #cbd5e1 !important;
     }
     [data-testid="stSidebar"] .stTextInput label {
-        color: #94a3b8 !important;
-        font-size: 0.8rem;
-        font-weight: 500;
+        color: #64748b !important;
+        font-size: 0.7rem;
+        font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.08em;
     }
     [data-testid="stSidebar"] .stTextInput input {
-        background: rgba(255,255,255,0.07) !important;
-        border: 1px solid rgba(255,255,255,0.12) !important;
-        border-radius: 8px !important;
-        color: #f1f5f9 !important;
-        padding: 0.6rem 0.8rem !important;
+        background: #ffffff !important;
+        border: 1.5px solid rgba(255,255,255,0.15) !important;
+        border-radius: 10px !important;
+        color: #0f172a !important;
+        padding: 0.65rem 0.9rem !important;
+        font-size: 0.88rem !important;
+        transition: all 0.2s ease;
     }
     [data-testid="stSidebar"] .stTextInput input::placeholder {
-        color: #64748b !important;
+        color: #94a3b8 !important;
     }
     [data-testid="stSidebar"] .stTextInput input:focus {
-        border-color: #6366f1 !important;
-        box-shadow: 0 0 0 2px rgba(99,102,241,0.25) !important;
+        border-color: #818cf8 !important;
+        box-shadow: 0 0 0 3px rgba(129,140,248,0.2) !important;
     }
 
     /* ── Sidebar buttons ── */
     [data-testid="stSidebar"] .stButton button[kind="primary"] {
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+        background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%) !important;
         color: white !important;
         border: none !important;
-        border-radius: 8px !important;
-        padding: 0.6rem 1rem !important;
+        border-radius: 10px !important;
+        padding: 0.65rem 1.2rem !important;
         font-weight: 600 !important;
         font-size: 0.85rem !important;
-        letter-spacing: 0.01em;
-        transition: all 0.2s ease;
+        letter-spacing: 0.02em;
+        transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+        box-shadow: 0 2px 8px rgba(99,102,241,0.3) !important;
     }
     [data-testid="stSidebar"] .stButton button[kind="primary"]:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(99,102,241,0.4) !important;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(99,102,241,0.45) !important;
     }
-    [data-testid="stSidebar"] .stButton button[kind="secondary"] {
-        background: rgba(255,255,255,0.06) !important;
+    [data-testid="stSidebar"] .stButton button[kind="secondary"],
+    [data-testid="stSidebar"] .stButton button:not([kind]) {
+        background: rgba(255,255,255,0.04) !important;
         color: #94a3b8 !important;
-        border: 1px solid rgba(255,255,255,0.1) !important;
+        border: 1px solid rgba(255,255,255,0.08) !important;
         border-radius: 8px !important;
-        font-size: 0.8rem !important;
+        font-size: 0.78rem !important;
+        font-weight: 500 !important;
+        transition: all 0.2s ease;
+    }
+    [data-testid="stSidebar"] .stButton button[kind="secondary"]:hover,
+    [data-testid="stSidebar"] .stButton button:not([kind]):hover {
+        background: rgba(255,255,255,0.08) !important;
+        color: #e2e8f0 !important;
     }
 
     /* ── Sidebar dividers ── */
     [data-testid="stSidebar"] hr {
-        border-color: rgba(255,255,255,0.08) !important;
-        margin: 1rem 0 !important;
+        border-color: rgba(255,255,255,0.06) !important;
+        margin: 0.8rem 0 !important;
     }
 
     /* ── Sidebar success banner ── */
     [data-testid="stSidebar"] [data-testid="stAlert"] {
-        background: rgba(34,197,94,0.12) !important;
-        border: 1px solid rgba(34,197,94,0.25) !important;
-        border-radius: 8px !important;
+        background: rgba(34,197,94,0.08) !important;
+        border: 1px solid rgba(34,197,94,0.2) !important;
+        border-radius: 10px !important;
         color: #86efac !important;
     }
 
+    /* ── Sidebar select/multiselect ── */
+    [data-testid="stSidebar"] .stSelectbox label,
+    [data-testid="stSidebar"] .stMultiSelect label {
+        font-size: 0.75rem !important;
+        font-weight: 500 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+        color: #64748b !important;
+    }
+
     /* ── Header area ── */
+    .hero-header {
+        padding: 0.5rem 0 1.2rem 0;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 1.5rem;
+    }
     .hero-title {
-        font-size: 1.8rem;
-        font-weight: 700;
+        font-size: 1.6rem;
+        font-weight: 800;
         color: #0f172a;
-        margin-bottom: 0.15rem;
-        letter-spacing: -0.02em;
+        margin-bottom: 0.1rem;
+        letter-spacing: -0.03em;
     }
     .hero-subtitle {
-        font-size: 0.9rem;
+        font-size: 0.82rem;
         color: #64748b;
         font-weight: 400;
-        margin-bottom: 1.5rem;
+        margin-bottom: 0;
+        line-height: 1.5;
     }
     .hero-badge {
         display: inline-block;
-        background: linear-gradient(135deg, #ede9fe, #e0e7ff);
-        color: #4f46e5;
-        padding: 0.25rem 0.75rem;
-        border-radius: 100px;
-        font-size: 0.72rem;
+        background: #f1f5f9;
+        color: #6366f1;
+        padding: 0.2rem 0.65rem;
+        border-radius: 6px;
+        font-size: 0.65rem;
         font-weight: 600;
-        letter-spacing: 0.03em;
+        letter-spacing: 0.04em;
         text-transform: uppercase;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.6rem;
+        border: 1px solid #e2e8f0;
     }
 
     /* ── Chat messages ── */
     [data-testid="stChatMessage"] {
         background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 1.2rem !important;
-        margin-bottom: 0.8rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        padding: 1.4rem 1.6rem !important;
+        margin-bottom: 1rem;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.03), 0 4px 12px rgba(0,0,0,0.02);
+        color: #0f172a !important;
     }
-    [data-testid="stChatMessage"][data-testid*="user"] {
-        background: #f8fafc;
-        border-color: #e2e8f0;
+    [data-testid="stChatMessage"] p,
+    [data-testid="stChatMessage"] li,
+    [data-testid="stChatMessage"] span,
+    [data-testid="stChatMessage"] td,
+    [data-testid="stChatMessage"] th,
+    [data-testid="stChatMessage"] strong {
+        color: #0f172a !important;
     }
 
     /* ── Chat input ── */
+    [data-testid="stChatInput"] {
+        border-top: 1px solid #e5e7eb;
+        padding-top: 0.8rem !important;
+        background: #f8f9fb;
+    }
     [data-testid="stChatInput"] textarea {
         border-radius: 12px !important;
-        border: 1.5px solid #e2e8f0 !important;
-        padding: 0.8rem 1rem !important;
-        font-size: 0.9rem !important;
+        border: 1.5px solid #d1d5db !important;
+        padding: 0.75rem 1rem !important;
+        font-size: 0.88rem !important;
+        background: #ffffff !important;
+        color: #0f172a !important;
     }
     [data-testid="stChatInput"] textarea:focus {
-        border-color: #6366f1 !important;
-        box-shadow: 0 0 0 3px rgba(99,102,241,0.12) !important;
+        border-color: #818cf8 !important;
+        box-shadow: 0 0 0 3px rgba(129,140,248,0.12) !important;
     }
 
     /* ── Spinner ── */
@@ -169,57 +223,102 @@ st.markdown("""
         border-top-color: #6366f1 !important;
     }
 
-    /* ── Markdown inside chat (report) ── */
+    /* ── Report markdown styling ── */
     [data-testid="stChatMessage"] h2 {
-        font-size: 1.3rem;
-        font-weight: 700;
-        color: #0f172a;
-        border-bottom: 2px solid #e2e8f0;
-        padding-bottom: 0.4rem;
-        margin-top: 0.5rem;
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: #0f172a !important;
+        border-bottom: 2px solid #6366f1;
+        padding-bottom: 0.5rem;
+        margin-top: 0.3rem;
+        margin-bottom: 1rem;
     }
     [data-testid="stChatMessage"] h3 {
-        font-size: 1.05rem;
-        font-weight: 600;
-        color: #1e293b;
-        margin-top: 1.2rem;
+        font-size: 1rem;
+        font-weight: 700;
+        color: #1e293b !important;
+        margin-top: 1.5rem;
+        margin-bottom: 0.5rem;
+        padding-bottom: 0.3rem;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    [data-testid="stChatMessage"] ul,
+    [data-testid="stChatMessage"] ol {
+        padding-left: 1.3rem;
+    }
+    [data-testid="stChatMessage"] li {
+        margin-bottom: 0.35rem;
+        line-height: 1.6;
     }
     [data-testid="stChatMessage"] a {
-        color: #6366f1;
+        color: #6366f1 !important;
         text-decoration: none;
         font-weight: 500;
+        border-bottom: 1px solid transparent;
+        transition: border-color 0.2s ease;
     }
     [data-testid="stChatMessage"] a:hover {
-        text-decoration: underline;
+        border-bottom-color: #6366f1;
+    }
+    [data-testid="stChatMessage"] code {
+        background: #f1f5f9;
+        padding: 0.15rem 0.4rem;
+        border-radius: 4px;
+        font-size: 0.82rem;
+    }
+    [data-testid="stChatMessage"] strong {
+        font-weight: 700;
+    }
+    [data-testid="stChatMessage"] hr {
+        border-color: #e5e7eb;
+        margin: 1.2rem 0;
     }
 
     /* ── Empty state ── */
     .empty-state {
         text-align: center;
-        padding: 4rem 2rem;
-        color: #94a3b8;
+        padding: 5rem 2rem;
     }
     .empty-state-icon {
-        font-size: 3rem;
-        margin-bottom: 1rem;
+        font-size: 2.5rem;
+        margin-bottom: 1.2rem;
+        opacity: 0.4;
     }
     .empty-state-text {
-        font-size: 1rem;
-        font-weight: 500;
-        color: #64748b;
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: #475569;
         margin-bottom: 0.3rem;
     }
     .empty-state-hint {
         font-size: 0.85rem;
         color: #94a3b8;
+        font-weight: 400;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar {
+        width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ── Header ──
-st.markdown('<div class="hero-badge">Powered by ClinicalTrials.gov + FDA + Claude</div>', unsafe_allow_html=True)
-st.markdown('<div class="hero-title">Pharma Due Diligence</div>', unsafe_allow_html=True)
-st.markdown('<div class="hero-subtitle">AI-powered pipeline analysis, regulatory review, and risk assessment for pharmaceutical investments</div>', unsafe_allow_html=True)
+st.markdown("""<div class="hero-header">
+    <div class="hero-badge">ClinicalTrials.gov + FDA + SEC EDGAR + Claude</div>
+    <div class="hero-title">Pharma Due Diligence</div>
+    <div class="hero-subtitle">AI-powered pipeline analysis, regulatory review, and financial assessment for healthcare investments</div>
+</div>""", unsafe_allow_html=True)
 
 
 def _run_async(coro):
@@ -256,12 +355,14 @@ def get_components():
 
     ct_client = ClinicalTrialsClient()
     fda_client = FDAClient(api_key=fda_key)
+    sec_client = SECEdgarClient(user_agent=os.getenv("SEC_USER_AGENT"))
     embedder = Embedder(openai_api_key=openai_key)
     retriever = Retriever(embedder=embedder)
     generator = Generator(api_key=anthropic_key)
     builder = ReportBuilder(
         ct_client=ct_client,
         fda_client=fda_client,
+        sec_client=sec_client,
         chunker_cls=Chunker,
         embedder=embedder,
         retriever=retriever,
@@ -283,6 +384,8 @@ if "collection_name" not in st.session_state:
 # ── Sidebar ──
 if "quick_pick" not in st.session_state:
     st.session_state.quick_pick = None
+if "quick_pick_generate" not in st.session_state:
+    st.session_state.quick_pick_generate = None
 
 THERAPEUTIC_AREAS = [
     "All",
@@ -335,15 +438,15 @@ QUICK_PICKS = {
 
 with st.sidebar:
     st.markdown("### \U0001f9ec New Report")
+    if st.session_state.quick_pick:
+        st.session_state.company_input_field = st.session_state.quick_pick
+        st.session_state.quick_pick = None
     company_input = st.text_input(
         "Company or Drug Name",
-        value=st.session_state.quick_pick or "",
+        key="company_input_field",
         placeholder="e.g., Moderna, Keytruda, Pfizer",
         label_visibility="collapsed",
     )
-    # Reset quick pick after it's been consumed
-    if st.session_state.quick_pick:
-        st.session_state.quick_pick = None
 
     # ── Filters ──
     with st.expander("Filters", expanded=False):
@@ -378,7 +481,7 @@ with st.sidebar:
         cols = st.columns(3)
         for i, (name, ticker) in enumerate(companies):
             if cols[i % 3].button(ticker, key=f"qp_{ticker}", use_container_width=True):
-                st.session_state.quick_pick = name
+                st.session_state.quick_pick_generate = name
                 st.rerun()
 
     st.divider()
@@ -391,27 +494,34 @@ with st.sidebar:
     st.divider()
     st.markdown(
         '<p style="font-size:0.7rem;color:#475569;text-align:center;margin-top:1rem;">'
-        'Data: ClinicalTrials.gov &bull; openFDA &bull; FAERS<br>'
+        'Data: ClinicalTrials.gov &bull; openFDA &bull; SEC EDGAR &bull; Yahoo Finance<br>'
         'AI: Claude &bull; OpenAI Embeddings &bull; ChromaDB'
         '</p>',
         unsafe_allow_html=True,
     )
 
-# Report generation
+# Report generation — from button or quick pick
+report_target = None
 if generate_btn and company_input:
+    report_target = company_input
+elif st.session_state.quick_pick_generate:
+    report_target = st.session_state.quick_pick_generate
+    st.session_state.quick_pick_generate = None
+
+if report_target:
     st.session_state.messages = []
-    st.session_state.current_company = company_input
+    st.session_state.current_company = report_target
 
     condition = therapeutic_area if therapeutic_area != "All" else None
     phases = selected_phases if len(selected_phases) < 4 else None
 
-    with st.spinner(f"Pulling data and generating report for **{company_input}**..."):
+    with st.spinner(f"Pulling data and generating report for **{report_target}**..."):
         try:
-            report = _run_async(builder.build_report(company_input, condition=condition, phases=phases))
+            report = _run_async(builder.build_report(report_target, condition=condition, phases=phases))
         except Exception as e:
             report = f"Error generating report: {e}"
 
-    st.session_state.collection_name = ReportBuilder.sanitize_collection_name(company_input)
+    st.session_state.collection_name = ReportBuilder.sanitize_collection_name(report_target)
     st.session_state.messages.append({"role": "assistant", "content": report})
     st.rerun()
 
