@@ -180,3 +180,73 @@ def test_chunk_adverse_events():
     assert "5000" in chunk["text"] or "5,000" in chunk["text"]
     assert chunk["metadata"]["source"] == "fda_adverse_events"
     assert chunk["metadata"]["drug_name"] == "TYGACIL"
+
+
+# ── Edge case tests ──
+
+
+def test_chunk_clinical_trial_missing_fields():
+    """Trial with minimal fields should not crash."""
+    trial = {"nct_id": "NCT99999999", "title": "Minimal Trial"}
+    chunks = Chunker.chunk_clinical_trial(trial)
+    assert len(chunks) == 1
+    assert "NCT99999999" in chunks[0]["text"]
+    assert chunks[0]["metadata"]["company"] == "Unknown"
+    assert chunks[0]["metadata"]["phase"] == "N/A"
+
+
+def test_chunk_clinical_trial_empty_dict():
+    """Completely empty trial dict should not crash."""
+    chunks = Chunker.chunk_clinical_trial({})
+    assert len(chunks) == 1
+    assert chunks[0]["metadata"]["nct_id"] == ""
+
+
+def test_chunk_fda_approval_missing_fields():
+    """Approval with missing keys should not crash."""
+    approval = {"manufacturer": "TestCo"}
+    chunks = Chunker.chunk_fda_approval(approval)
+    assert len(chunks) == 1
+    assert chunks[0]["metadata"]["source"] == "fda_approval"
+    assert chunks[0]["metadata"]["drug_name"] == "Unknown"
+
+
+def test_chunk_adverse_events_none_reactions():
+    """Adverse events with sample_reactions=None should not crash."""
+    ae_summary = {"total_reports": 100, "sample_reactions": None}
+    chunks = Chunker.chunk_adverse_events("TestDrug", ae_summary)
+    assert len(chunks) == 1
+    assert "100" in chunks[0]["text"]
+
+
+def test_chunk_adverse_events_missing_total():
+    """Adverse events with missing total_reports should not crash."""
+    ae_summary = {}
+    chunks = Chunker.chunk_adverse_events("TestDrug", ae_summary)
+    assert len(chunks) == 1
+    assert "0" in chunks[0]["text"]
+
+
+def test_chunk_device_clearance_missing_device_name():
+    """Device clearance without device_name should not crash."""
+    clearance = {"k_number": "K999999"}
+    chunks = Chunker.chunk_device_clearance(clearance)
+    assert len(chunks) == 1
+    assert "Unknown" in chunks[0]["text"]
+
+
+def test_chunk_company_financials_string_value():
+    """Financial data with string instead of number should not crash."""
+    facts = {
+        "company_name": "Test Corp",
+        "revenue": {"value": "not_a_number", "period_end": "2024-01-01"},
+    }
+    market = {"ticker": "TEST", "current_price": "bad_value"}
+    chunks = Chunker.chunk_company_financials("Test Corp", facts, market)
+    assert len(chunks) >= 1
+
+
+def test_chunk_company_financials_no_data():
+    """Empty facts and no market data should return no chunks."""
+    chunks = Chunker.chunk_company_financials("Empty Corp", {}, None)
+    assert chunks == []

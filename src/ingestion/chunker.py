@@ -6,17 +6,20 @@ class Chunker:
     def chunk_clinical_trial(trial: dict) -> list[dict]:
         outcomes_text = ""
         for outcome in trial.get("primary_outcomes", []):
-            outcomes_text += f"  - {outcome['measure']} ({outcome.get('timeFrame', 'N/A')})\n"
-        interventions_text = ", ".join(i["name"] for i in trial.get("interventions", []))
-        nct_id = trial["nct_id"]
+            outcomes_text += f"  - {outcome.get('measure', 'N/A')} ({outcome.get('timeFrame', 'N/A')})\n"
+        interventions_text = ", ".join(i.get("name", "") for i in trial.get("interventions", []))
+        nct_id = trial.get("nct_id", "")
+        sponsor = trial.get("sponsor", "Unknown")
+        phase = trial.get("phase", "N/A")
+        status = trial.get("status", "Unknown")
         source_url = f"https://clinicaltrials.gov/study/{nct_id}"
         text = (
-            f"Clinical Trial: {trial['title']}\n"
+            f"Clinical Trial: {trial.get('title', 'Untitled')}\n"
             f"NCT ID: {nct_id}\n"
             f"Source: {source_url}\n"
-            f"Phase: {trial['phase']}\n"
-            f"Status: {trial['status']}\n"
-            f"Sponsor: {trial['sponsor']}\n"
+            f"Phase: {phase}\n"
+            f"Status: {status}\n"
+            f"Sponsor: {sponsor}\n"
             f"Enrollment: {trial.get('enrollment', 'N/A')}\n"
             f"Conditions: {', '.join(trial.get('conditions', []))}\n"
             f"Interventions: {interventions_text}\n"
@@ -29,10 +32,10 @@ class Chunker:
             "source": "clinicaltrials",
             "source_url": source_url,
             "nct_id": nct_id,
-            "company": trial["sponsor"],
+            "company": sponsor,
             "drug_name": interventions_text,
-            "phase": trial["phase"],
-            "status": trial["status"],
+            "phase": phase,
+            "status": status,
             "date": trial.get("start_date", ""),
         }}]
 
@@ -41,7 +44,7 @@ class Chunker:
         products_text = ""
         for p in approval.get("products", []):
             ingredients = ", ".join(
-                f"{i['name']} {i.get('strength', '')}"
+                f"{i.get('name', 'Unknown')} {i.get('strength', '')}"
                 for i in p.get("active_ingredients", [])
             )
             products_text += (
@@ -62,11 +65,11 @@ class Chunker:
                 f"({s.get('submission_class_code_description', '')}): "
                 f"{s.get('submission_status', '')} on {date_fmt}\n"
             )
-        app_num = approval["application_number"]
+        app_num = approval.get("application_number", "")
         app_digits = "".join(c for c in app_num if c.isdigit())
         source_url = f"https://www.accessdata.fda.gov/scripts/cder/daf/index.cfm?event=overview.process&ApplNo={app_digits}"
         text = (
-            f"FDA Drug Application: {approval['brand_name']} ({approval['generic_name']})\n"
+            f"FDA Drug Application: {approval.get('brand_name', 'Unknown')} ({approval.get('generic_name', '')})\n"
             f"Application Number: {app_num}\n"
             f"Source: {source_url}\n"
             f"Manufacturer: {approval.get('manufacturer', '')}\n"
@@ -76,7 +79,7 @@ class Chunker:
         return [{"text": text, "metadata": {
             "source": "fda_approval",
             "source_url": source_url,
-            "drug_name": approval["brand_name"],
+            "drug_name": approval.get("brand_name", "Unknown"),
             "company": approval.get("manufacturer", ""),
             "application_number": app_num,
         }}]
@@ -132,7 +135,7 @@ class Chunker:
             else decision_raw
         )
         text = (
-            f"FDA Device 510(k) Clearance: {clearance['device_name']}\n"
+            f"FDA Device 510(k) Clearance: {clearance.get('device_name', 'Unknown')}\n"
             f"510(k) Number: {k_number}\n"
             f"Source: {source_url}\n"
             f"Applicant: {clearance.get('applicant', '')}\n"
@@ -201,9 +204,9 @@ class Chunker:
         filing_lines = []
         for f in filings:
             filing_lines.append(
-                f"  - {f['form_type']} filed {f['filing_date']}: "
+                f"  - {f.get('form_type', 'N/A')} filed {f.get('filing_date', 'N/A')}: "
                 f"{f.get('description', 'N/A')} "
-                f"[View Filing]({f['filing_url']})"
+                f"[View Filing]({f.get('filing_url', '')})"
             )
         source_url = f"https://www.sec.gov/cgi-bin/browse-edgar?company={company_name.replace(' ', '+')}&CIK=&type=&dateb=&owner=include&count=40&search_text=&action=getcompany"
         text = (
@@ -229,6 +232,10 @@ class Chunker:
             period = val_dict.get("period_end", "")
             if val is None:
                 return "N/A"
+            try:
+                val = float(val)
+            except (TypeError, ValueError):
+                return f"{val} (period ending {period})"
             if abs(val) >= 1_000_000_000:
                 return f"${val / 1_000_000_000:.2f}B (period ending {period})"
             elif abs(val) >= 1_000_000:
@@ -273,6 +280,10 @@ class Chunker:
             def _fmt(val, fmt="dollar"):
                 if val is None:
                     return "N/A"
+                try:
+                    val = float(val)
+                except (TypeError, ValueError):
+                    return str(val)
                 if fmt == "dollar":
                     if abs(val) >= 1_000_000_000:
                         return f"${val / 1_000_000_000:.2f}B"
@@ -323,12 +334,12 @@ class Chunker:
 
     @staticmethod
     def chunk_adverse_events(drug_name: str, ae_summary: dict) -> list[dict]:
-        reactions_text = ", ".join(ae_summary.get("sample_reactions", []))
+        reactions_text = ", ".join(ae_summary.get("sample_reactions") or [])
         source_url = f"https://fis.fda.gov/extensions/FPD-QDE-FAERS/FPD-QDE-FAERS.html"
         text = (
             f"Adverse Events Summary for {drug_name}\n"
             f"Source: {source_url}\n"
-            f"Total FAERS Reports: {ae_summary['total_reports']:,}\n"
+            f"Total FAERS Reports: {ae_summary.get('total_reports', 0):,}\n"
             f"Serious Reports in Sample: {ae_summary.get('serious_count', 0)}\n"
             f"Common Reactions: {reactions_text}"
         )

@@ -73,8 +73,11 @@ class SECEdgarClient:
         primary_docs = recent.get("primaryDocument", [])
         descriptions = recent.get("primaryDocDescription", [])
 
+        # Use the shortest array length to avoid index errors on malformed data
+        length = min(len(forms), len(dates), len(accessions), len(primary_docs))
+
         results = []
-        for i in range(len(forms)):
+        for i in range(length):
             if forms[i] not in filing_types:
                 continue
             accession_clean = accessions[i].replace("-", "")

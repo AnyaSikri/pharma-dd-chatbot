@@ -47,3 +47,31 @@ def test_generate_report_with_no_data(mock_anthropic):
     generator = Generator(api_key="test-key")
     result = generator.generate_report("UnknownCo", [])
     assert isinstance(result, str)
+
+
+def test_generate_report_empty_response():
+    """API returns empty content array — should return fallback message."""
+    with patch("src.rag.generator.Anthropic") as MockAnthropic:
+        mock_client = MagicMock()
+        MockAnthropic.return_value = mock_client
+        mock_message = MagicMock()
+        mock_message.content = []
+        mock_client.messages.create.return_value = mock_message
+
+        generator = Generator(api_key="test-key")
+        result = generator.generate_report("TestPharma", [{"text": "data", "metadata": {}}])
+        assert "empty response" in result.lower()
+
+
+def test_generate_chat_response_empty_response():
+    """Chat API returns empty content — should return fallback message."""
+    with patch("src.rag.generator.Anthropic") as MockAnthropic:
+        mock_client = MagicMock()
+        MockAnthropic.return_value = mock_client
+        mock_message = MagicMock()
+        mock_message.content = []
+        mock_client.messages.create.return_value = mock_message
+
+        generator = Generator(api_key="test-key")
+        result = generator.generate_chat_response("test?", [], [])
+        assert "try again" in result.lower()

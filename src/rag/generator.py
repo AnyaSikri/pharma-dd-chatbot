@@ -78,6 +78,8 @@ class Generator:
                 "content": f"Generate a due diligence report for: {company_or_drug}\n\nData:\n{context}"
             }],
         )
+        if not response.content:
+            return "Unable to generate report — the AI returned an empty response. Please try again."
         return response.content[0].text
 
     def generate_chat_response(self, question: str, chunks: list[dict], history: list[dict]) -> str:
@@ -93,4 +95,6 @@ class Generator:
             system=CHAT_SYSTEM_PROMPT,
             messages=messages,
         )
+        if not response.content:
+            return "Unable to generate a response. Please try again."
         return response.content[0].text

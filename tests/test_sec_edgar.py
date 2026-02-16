@@ -146,3 +146,64 @@ async def test_get_market_data_returns_none_on_failure():
     with patch.object(client, "_fetch_yfinance", return_value=None):
         result = await client.get_market_data("INVALID")
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_filings_mismatched_arrays():
+    """SEC returns arrays of different lengths — should not crash."""
+    client = SECEdgarClient()
+    submissions = {
+        "name": "Test Corp",
+        "filings": {
+            "recent": {
+                "form": ["10-K", "10-Q", "8-K"],
+                "filingDate": ["2024-01-01", "2024-02-01"],  # shorter
+                "accessionNumber": ["0001-24-000010", "0001-24-000020"],
+                "primaryDocument": ["doc1.htm", "doc2.htm"],
+                "primaryDocDescription": ["Report 1"],
+            }
+        },
+    }
+    mock_response = AsyncMock()
+    mock_response.json = MagicMock(return_value=submissions)
+    mock_response.raise_for_status = MagicMock()
+
+    with patch.object(client._client, "get", return_value=mock_response):
+        filings = await client.get_filings("0000000001")
+
+    # Should only return filings up to shortest array length (2)
+    assert len(filings) <= 2
+
+
+@pytest.mark.asyncio
+async def test_get_filings_empty_recent():
+    """SEC returns empty recent filings — should return empty list."""
+    client = SECEdgarClient()
+    submissions = {
+        "name": "Test Corp",
+        "filings": {"recent": {"form": [], "filingDate": [], "accessionNumber": [], "primaryDocument": []}},
+    }
+    mock_response = AsyncMock()
+    mock_response.json = MagicMock(return_value=submissions)
+    mock_response.raise_for_status = MagicMock()
+
+    with patch.object(client._client, "get", return_value=mock_response):
+        filings = await client.get_filings("0000000001")
+
+    assert filings == []
+
+
+@pytest.mark.asyncio
+async def test_get_company_facts_empty_gaap():
+    """Company with no us-gaap data should return only company_name."""
+    client = SECEdgarClient()
+    data = {"entityName": "New Startup Inc.", "facts": {}}
+    mock_response = AsyncMock()
+    mock_response.json = MagicMock(return_value=data)
+    mock_response.raise_for_status = MagicMock()
+
+    with patch.object(client._client, "get", return_value=mock_response):
+        facts = await client.get_company_facts("0000000001")
+
+    assert facts["company_name"] == "New Startup Inc."
+    assert "revenue" not in facts
