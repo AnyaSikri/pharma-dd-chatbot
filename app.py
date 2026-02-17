@@ -32,8 +32,8 @@ st.markdown("""
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    /* Hide ALL Streamlit chrome */
-    #MainMenu, footer, header,
+    /* Hide Streamlit chrome but keep sidebar toggle */
+    #MainMenu, footer,
     [data-testid="stDecoration"],
     [data-testid="stToolbar"],
     [data-testid="stStatusWidget"],
@@ -42,6 +42,10 @@ st.markdown("""
         display: none !important;
         visibility: hidden !important;
         height: 0 !important;
+    }
+    header[data-testid="stHeader"] {
+        background: transparent !important;
+        backdrop-filter: none !important;
     }
 
     /* ── Main content area ── */
