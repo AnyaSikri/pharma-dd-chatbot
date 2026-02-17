@@ -32,40 +32,10 @@ st.markdown("""
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    /* Hide Streamlit chrome but keep sidebar toggle */
-    #MainMenu, footer,
-    [data-testid="stDecoration"],
-    [data-testid="stToolbar"],
-    [data-testid="stStatusWidget"],
-    .viewerBadge_container__r5tak,
-    ._profileContainer_gzau3_53 {
-        display: none !important;
-        visibility: hidden !important;
-        height: 0 !important;
-    }
-    header[data-testid="stHeader"] {
-        background: transparent !important;
-        backdrop-filter: none !important;
-    }
-    /* Ensure sidebar toggle is always visible */
-    [data-testid="stSidebarCollapsedControl"],
-    [data-testid="collapsedControl"] {
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        z-index: 999999 !important;
-        position: fixed !important;
-        top: 0.5rem !important;
-        left: 0.5rem !important;
-    }
-    [data-testid="stSidebarCollapsedControl"] button,
-    [data-testid="collapsedControl"] button {
-        background: #1a2540 !important;
-        color: white !important;
-        border-radius: 8px !important;
-        border: none !important;
-        padding: 0.5rem !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
+    /* Minimal chrome hiding — keep sidebar and header functional */
+    #MainMenu, footer {
+        visibility: hidden;
+        height: 0;
     }
 
     /* ── Main content area ── */
