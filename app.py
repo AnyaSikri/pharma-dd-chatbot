@@ -386,6 +386,10 @@ if "quick_pick" not in st.session_state:
     st.session_state.quick_pick = None
 if "quick_pick_generate" not in st.session_state:
     st.session_state.quick_pick_generate = None
+if "report_count" not in st.session_state:
+    st.session_state.report_count = 0
+
+MAX_REPORTS_PER_SESSION = 10
 
 THERAPEUTIC_AREAS = [
     "All",
@@ -509,21 +513,25 @@ elif st.session_state.quick_pick_generate:
     st.session_state.quick_pick_generate = None
 
 if report_target:
-    st.session_state.messages = []
-    st.session_state.current_company = report_target
+    if st.session_state.report_count >= MAX_REPORTS_PER_SESSION:
+        st.error(f"You've reached the limit of {MAX_REPORTS_PER_SESSION} reports per session. Please refresh the page to start a new session.")
+    else:
+        st.session_state.messages = []
+        st.session_state.current_company = report_target
 
-    condition = therapeutic_area if therapeutic_area != "All" else None
-    phases = selected_phases if len(selected_phases) < 4 else None
+        condition = therapeutic_area if therapeutic_area != "All" else None
+        phases = selected_phases if len(selected_phases) < 4 else None
 
-    with st.spinner(f"Pulling data and generating report for **{report_target}**..."):
-        try:
-            report = _run_async(builder.build_report(report_target, condition=condition, phases=phases))
-        except Exception as e:
-            report = f"Error generating report: {e}"
+        with st.spinner(f"Pulling data and generating report for **{report_target}**..."):
+            try:
+                report = _run_async(builder.build_report(report_target, condition=condition, phases=phases))
+            except Exception as e:
+                report = f"Error generating report: {e}"
 
-    st.session_state.collection_name = ReportBuilder.sanitize_collection_name(report_target)
-    st.session_state.messages.append({"role": "assistant", "content": report})
-    st.rerun()
+        st.session_state.report_count += 1
+        st.session_state.collection_name = ReportBuilder.sanitize_collection_name(report_target)
+        st.session_state.messages.append({"role": "assistant", "content": report})
+        st.rerun()
 
 # ── Empty state ──
 if not st.session_state.messages:
