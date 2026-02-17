@@ -32,10 +32,23 @@ st.markdown("""
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    /* Minimal chrome hiding — keep sidebar and header functional */
+    /* Minimal chrome hiding */
     #MainMenu, footer {
         visibility: hidden;
         height: 0;
+    }
+
+    /* Force sidebar always open */
+    [data-testid="stSidebar"] {
+        min-width: 320px !important;
+        max-width: 320px !important;
+        transform: none !important;
+        position: relative !important;
+    }
+    [data-testid="stSidebarCollapsedControl"],
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebar"] button[kind="headerNoPadding"] {
+        display: none !important;
     }
 
     /* ── Main content area ── */
@@ -63,7 +76,9 @@ st.markdown("""
         color: #cbd5e1 !important;
     }
     /* Hide sidebar helper/instruction text */
-    [data-testid="stSidebar"] .stTextInput div[data-testid="InputInstructions"] {
+    [data-testid="stSidebar"] .stTextInput div[data-testid="InputInstructions"],
+    [data-testid="stSidebar"] .stTextInput small,
+    [data-testid="stSidebar"] .stTextInput .st-emotion-cache-ue6h4q {
         display: none !important;
     }
     [data-testid="stSidebar"] .stTextInput label {
