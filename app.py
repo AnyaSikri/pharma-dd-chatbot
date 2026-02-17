@@ -62,8 +62,15 @@ st.markdown("""
     [data-testid="stSidebar"] > div:first-child {
         padding-top: 1.5rem;
     }
-    [data-testid="stSidebar"] * {
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] li,
+    [data-testid="stSidebar"] .stMarkdown {
         color: #cbd5e1 !important;
+    }
+    /* Hide sidebar helper/instruction text */
+    [data-testid="stSidebar"] .stTextInput div[data-testid="InputInstructions"] {
+        display: none !important;
     }
     [data-testid="stSidebar"] .stTextInput label {
         color: #64748b !important;
