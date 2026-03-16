@@ -7,6 +7,10 @@ from pydantic import BaseModel
 from typing import Optional, List
 from dotenv import load_dotenv
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 from api.dependencies import verify_jwt
 from src.api.clinical_trials import ClinicalTrialsClient
 from src.api.fda import FDAClient
@@ -20,6 +24,10 @@ from src.report.builder import ReportBuilder
 load_dotenv()
 
 app = FastAPI(title="Pharma DD API")
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -80,7 +88,8 @@ def health():
 
 
 @app.post("/report")
-def generate_report(req: ReportRequest, _user=Depends(verify_jwt)):
+@limiter.limit("10/hour")
+def generate_report(request: Request, req: ReportRequest, _user=Depends(verify_jwt)):
     try:
         report = _run_async(builder.build_report(
             req.company,
