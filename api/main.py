@@ -1,6 +1,7 @@
 import asyncio
 import threading
 import os
+import logging
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -23,6 +24,8 @@ from src.report.builder import ReportBuilder
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="Pharma DD API")
 
 limiter = Limiter(key_func=get_remote_address)
@@ -31,8 +34,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=["http://localhost:5173"],  # update with Vercel URL after deployment (Task 9)
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -49,8 +52,10 @@ def _run_async(coro):
 
 
 def _init_builder():
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "placeholder")
-    openai_key = os.getenv("OPENAI_API_KEY", "placeholder")
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if not anthropic_key or not openai_key:
+        raise RuntimeError("ANTHROPIC_API_KEY and OPENAI_API_KEY must be set")
     fda_key = os.getenv("OPENFDA_API_KEY")
     sec_agent = os.getenv("SEC_USER_AGENT")
     embedder = Embedder(openai_api_key=openai_key)
@@ -97,7 +102,8 @@ def generate_report(request: Request, req: ReportRequest, _user=Depends(verify_j
             phases=req.phases,
         ))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Report generation failed: {e}")
+        logger.exception("Report generation failed for company=%s", req.company)
+        raise HTTPException(status_code=500, detail="Report generation failed. Please try again.")
     collection_id = ReportBuilder.sanitize_collection_name(req.company)
     return {"report": report, "collection_id": collection_id}
 
@@ -110,5 +116,6 @@ def chat(req: ChatRequest, _user=Depends(verify_jwt)):
             req.message, chunks, req.history
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Chat failed: {e}")
+        logger.exception("Chat failed for collection_id=%s", req.collection_id)
+        raise HTTPException(status_code=500, detail="Chat failed. Please try again.")
     return {"response": response}

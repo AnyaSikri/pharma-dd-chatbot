@@ -61,12 +61,11 @@ def test_report_returns_report_and_collection_id(monkeypatch):
     monkeypatch.setenv("SUPABASE_JWT_SECRET", FAKE_SECRET)
     token = _make_token()
 
-    # mock builder.build_report to avoid real API calls
     import api.main as main_module
     async def mock_build_report(company, condition=None, phases=None):
         return "## Report for test company"
     main_module.builder.build_report = mock_build_report
-    main_module.builder.sanitize_collection_name = lambda x: "test_company"
+    # Note: sanitize_collection_name is a static class method; "TestCo" -> "testco"
 
     response = client.post(
         "/report",
@@ -75,9 +74,8 @@ def test_report_returns_report_and_collection_id(monkeypatch):
     )
     assert response.status_code == 200
     data = response.json()
-    assert "report" in data
-    assert "collection_id" in data
     assert data["report"] == "## Report for test company"
+    assert data["collection_id"] == "testco"  # actual sanitized value of "TestCo"
 
 def test_chat_returns_response(monkeypatch):
     monkeypatch.setenv("SUPABASE_JWT_SECRET", FAKE_SECRET)
@@ -117,3 +115,4 @@ def test_report_returns_500_on_pipeline_error(monkeypatch):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 500
+    assert response.json()["detail"] == "Report generation failed. Please try again."
