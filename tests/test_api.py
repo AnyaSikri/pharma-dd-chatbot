@@ -28,5 +28,25 @@ def test_protected_route_valid_token(monkeypatch):
         json={"company": "Pfizer"},
         headers={"Authorization": f"Bearer {token}"},
     )
-    # 200 or 500 (pipeline not wired yet), but NOT 401
-    assert response.status_code != 401
+    assert response.status_code == 200
+    assert response.json()["report"] == "stub"
+
+def test_protected_route_expired_token(monkeypatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", FAKE_SECRET)
+    token = _make_token(exp_offset=-1)
+    response = client.post(
+        "/report",
+        json={"company": "Pfizer"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 401
+
+def test_protected_route_wrong_secret(monkeypatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", FAKE_SECRET)
+    token = _make_token(secret="completely-different-secret-here!")
+    response = client.post(
+        "/report",
+        json={"company": "Pfizer"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 401

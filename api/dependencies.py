@@ -18,11 +18,12 @@ def verify_jwt(credentials: Optional[HTTPAuthorizationCredentials] = Depends(bea
     if not secret:
         raise HTTPException(status_code=500, detail="JWT secret not configured")
     try:
+        # Supabase JWTs may not include an audience claim; skip aud validation
         payload = jwt.decode(token, secret, algorithms=["HS256"], options={"verify_aud": False})
         return payload
     except JWTError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid or expired token: {e}",
+            detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
