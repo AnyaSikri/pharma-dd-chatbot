@@ -70,7 +70,7 @@ class ReportRequest(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     collection_id: str
-    history: Optional[List[dict]] = []
+    history: Optional[List[dict]] = None
 
 
 # ── Endpoints ──

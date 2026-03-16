@@ -94,3 +94,26 @@ def test_chat_returns_response(monkeypatch):
     )
     assert response.status_code == 200
     assert response.json()["response"] == "mock answer"
+
+def test_chat_requires_auth():
+    response = client.post(
+        "/chat",
+        json={"message": "test", "collection_id": "x", "history": []},
+    )
+    assert response.status_code == 401
+
+def test_report_returns_500_on_pipeline_error(monkeypatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", FAKE_SECRET)
+    token = _make_token()
+
+    import api.main as main_module
+    async def failing_build_report(company, condition=None, phases=None):
+        raise RuntimeError("pipeline exploded")
+    main_module.builder.build_report = failing_build_report
+
+    response = client.post(
+        "/report",
+        json={"company": "BrokenCo"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 500
