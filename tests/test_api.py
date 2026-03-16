@@ -23,6 +23,12 @@ def test_protected_route_no_token():
 def test_protected_route_valid_token(monkeypatch):
     monkeypatch.setenv("SUPABASE_JWT_SECRET", FAKE_SECRET)
     token = _make_token()
+
+    import api.main as main_module
+    async def mock_build_report(company, condition=None, phases=None):
+        return "stub"
+    main_module.builder.build_report = mock_build_report
+
     response = client.post(
         "/report",
         json={"company": "Pfizer"},
@@ -50,3 +56,41 @@ def test_protected_route_wrong_secret(monkeypatch):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 401
+
+def test_report_returns_report_and_collection_id(monkeypatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", FAKE_SECRET)
+    token = _make_token()
+
+    # mock builder.build_report to avoid real API calls
+    import api.main as main_module
+    async def mock_build_report(company, condition=None, phases=None):
+        return "## Report for test company"
+    main_module.builder.build_report = mock_build_report
+    main_module.builder.sanitize_collection_name = lambda x: "test_company"
+
+    response = client.post(
+        "/report",
+        json={"company": "TestCo"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "report" in data
+    assert "collection_id" in data
+    assert data["report"] == "## Report for test company"
+
+def test_chat_returns_response(monkeypatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", FAKE_SECRET)
+    token = _make_token()
+
+    import api.main as main_module
+    main_module.builder.retriever.retrieve_for_chat = lambda col, msg, **kw: []
+    main_module.builder.generator.generate_chat_response = lambda q, chunks, history: "mock answer"
+
+    response = client.post(
+        "/chat",
+        json={"message": "What are the trials?", "collection_id": "test_co", "history": []},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    assert response.json()["response"] == "mock answer"
