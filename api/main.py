@@ -34,7 +34,10 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # update with Vercel URL after deployment (Task 9)
+    allow_origins=[
+        "http://localhost:5173",
+        "https://pharma-insight-engine-86.lovable.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
